@@ -1,0 +1,17 @@
+{
+  "name": "cyberagent-marketplace-prototip",
+  "version": "0.1.0",
+  "description": "Prototip: avtonomna tržnica AI-agentov za personalizirane kibernetske simulacije z mikroplačili x402",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "start:sepolia": "X402_MODE=sepolia node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "viem": "^2.57.10"
+  }
+}
