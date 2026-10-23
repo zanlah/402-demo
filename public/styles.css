@@ -47,6 +47,12 @@ h3 { font-size: 14px; margin: 0 0 8px; }
 .badge { margin-left: auto; background: var(--accent); color: #fff; font-size: 11px; border-radius: 99px; padding: 0 7px; line-height: 18px; }
 .badge.warn { background: var(--warn); }
 .badge:empty { display: none; }
+.user-switch { width: 100%; margin: 2px 0 6px; background: #1a202c; color: #fff; border: 1px solid #2d3546; border-radius: 8px; padding: 7px 8px; font-size: 13px; }
+.field textarea { width: 100%; min-height: 130px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: #fff; font-family: var(--mono); font-size: 12px; resize: vertical; }
+.plan-item { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 8px; background: #fff; }
+.plan-item summary { cursor: pointer; }
+.dept-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.dept-chips .dept { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 6px 4px 12px; font-size: 13px; background: #fff; }
 .wallet { margin-top: auto; background: #1a202c; border-radius: 9px; padding: 12px; font-size: 12px; }
 .wallet .row { display: flex; justify-content: space-between; margin-top: 4px; }
 .wallet .addr { font-family: var(--mono); color: #8f98aa; font-size: 11px; }
@@ -116,12 +122,13 @@ mark.flag sup, .flag-num { display: inline-grid; place-items: center; width: 16p
 .back-btn { display: none; }
 
 /* Agent */
-.log { font-size: 13px; }
+.log { font-size: 13px; max-height: 560px; overflow-y: auto; padding-right: 6px; }
 .log .step { display: grid; grid-template-columns: 26px 1fr; gap: 10px; padding: 9px 0; border-bottom: 1px dashed var(--line); animation: fadein .25s ease; }
 .log .dot { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; background: #8a93a3; }
 .log .dot.http402 { background: var(--warn); }
 .log .dot.paid, .log .dot.ok { background: var(--ok); }
 .log .dot.error { background: var(--bad); }
+.log .dot.user { background: var(--ink); }
 .log .dot.sign { background: #7a4cf0; }
 .log .dot.policy, .log .dot.request { background: var(--accent); }
 .log details { margin-top: 6px; }
@@ -199,6 +206,7 @@ tr.rejected td { color: var(--muted); }
   .app { grid-template-columns: 1fr; }
   .sidebar { position: sticky; top: 0; height: auto; z-index: 30; flex-direction: row; align-items: center; padding: 10px 12px; gap: 10px; overflow-x: auto; }
   .brand-sub, .nav-group, .wallet { display: none; }
+  .user-switch { width: auto; max-width: 150px; margin: 0; }
   .brand-name { display: none; }
   .nav { flex-direction: row; gap: 2px; }
   .nav a { white-space: nowrap; padding: 7px 9px; font-size: 13px; }

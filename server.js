@@ -139,20 +139,12 @@ const policy = {
 };
 
 // ---------------------------------------------------------------------------
-// Uporabnik (psevdonimiziran) in stanje
+// Uporabniki (imenik organizacije) in stanje
+// Ime in e-pošta ostaneta v organizaciji. Glavni agent in zunanji agenti vidijo samo psevdonim, vlogo in oddelek.
 // ---------------------------------------------------------------------------
-const user = {
-  id: 'U-1042',
-  role: 'Razvijalec',
-  department: 'Razvoj',
-  language: 'sl',
-  level: 2,
-  points: 0,
-  stats: Object.fromEntries(ALL_TACTICS.map((t) => [t, { seen: 0, failed: 0, reported: 0 }])),
-  history: [],
-};
-
-const messages = []; // nabiralnik
+const users = [];
+let activeUserId = null; // uporabnik, čigar nabiralnik je prikazan v pogledu »Zaposleni«
+const messages = []; // nabiralniki vseh uporabnikov (polje userId)
 const deliveries = []; // simulacije, ki čakajo na naključni čas dostave
 const transactions = [];
 const plans = new Map();
@@ -166,30 +158,153 @@ function log(actor, action, detail = '') {
 function addMessage(m) {
   const msg = { id: randomUUID().slice(0, 8), receivedAt: new Date().toISOString(), read: false, resolved: null, ...m };
   messages.unshift(msg);
+  messages.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
   return msg;
 }
 
 const minutesAgo = (m) => new Date(Date.now() - m * 60000).toISOString();
-LEGIT_MESSAGES.forEach((m, i) => addMessage({ ...m, simulation: false, receivedAt: minutesAgo(40 + i * 75) }));
-addMessage({
-  ...generateScenario({ channel: 'email', tactic: 'avtoriteta', difficulty: 2, role: user.role, department: user.department }),
-  simulation: true,
-  agentId: 'baseline',
-  agentName: 'Izhodiščna simulacija',
-  cost: 0,
-  receivedAt: minutesAgo(12),
+const userById = (id) => users.find((u) => u.id === id);
+const activeUser = () => userById(activeUserId);
+const userMessages = (u) => messages.filter((m) => m.userId === u.id);
+
+function newPseudonym() {
+  let id;
+  do id = `U-${1000 + Math.floor(Math.random() * 9000)}`;
+  while (userById(id));
+  return id;
+}
+
+function addUser({ name, email, role, department, language = 'sl', included = true, id = newPseudonym() }) {
+  const u = {
+    id,
+    name,
+    email,
+    role,
+    department,
+    language,
+    included,
+    addedAt: new Date().toISOString(),
+    level: 2,
+    points: 0,
+    stats: Object.fromEntries(ALL_TACTICS.map((t) => [t, { seen: 0, failed: 0, reported: 0 }])),
+    history: [],
+  };
+  users.push(u);
+  LEGIT_MESSAGES.forEach((m, i) => addMessage({ ...m, userId: u.id, simulation: false, receivedAt: minutesAgo(40 + i * 75) }));
+  return u;
+}
+
+// Izhodiščna simulacija (predloga, brez plačila) za demo uporabnika. Uvoženi uporabniki prvo simulacijo dobijo prek plana.
+function deliverBaseline(u) {
+  addMessage({
+    ...generateScenario({ channel: 'email', tactic: 'avtoriteta', difficulty: 2, role: u.role, department: u.department }),
+    userId: u.id,
+    simulation: true,
+    agentId: 'baseline',
+    agentName: 'Izhodiščna simulacija',
+    cost: 0,
+    receivedAt: minutesAgo(12),
+  });
+  log('sistem', 'Izhodiščna simulacija dostavljena', `${u.id}, taktika: avtoriteta, težavnost 2`);
+}
+
+// Preprost uvoz CSV: glava z ime, e-pošta, vloga, oddelek (jezik neobvezno), ločilo vejica ali podpičje.
+const CSV_COLUMNS = {
+  name: ['ime', 'ime in priimek', 'name'],
+  email: ['email', 'e-pošta', 'e-posta', 'eposta', 'mail'],
+  role: ['vloga', 'role', 'delovno mesto'],
+  department: ['oddelek', 'department'],
+  language: ['jezik', 'language'],
+};
+
+function parseUsersCsv(text) {
+  const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length < 2) return { error: 'CSV mora imeti vrstico z glavo in vsaj enega uporabnika.' };
+  const sep = lines[0].includes(';') ? ';' : ',';
+  const split = (l) => l.split(sep).map((c) => c.trim().replace(/^"|"$/g, ''));
+  const header = split(lines[0]).map((h) => h.toLowerCase());
+  const col = Object.fromEntries(Object.entries(CSV_COLUMNS).map(([k, names]) => [k, header.findIndex((h) => names.includes(h))]));
+  const missing = ['name', 'email', 'role', 'department'].filter((k) => col[k] < 0);
+  if (missing.length) return { error: `Manjkajo stolpci: ${missing.map((k) => CSV_COLUMNS[k][0]).join(', ')}.` };
+  const rows = [];
+  const errors = [];
+  lines.slice(1).forEach((l, i) => {
+    const c = split(l);
+    const row = Object.fromEntries(Object.entries(col).map(([k, idx]) => [k, idx >= 0 ? c[idx] || '' : '']));
+    if (!row.name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(row.email) || !row.role || !row.department) {
+      errors.push(`vrstica ${i + 2}: manjka podatek ali neveljaven e-naslov`);
+      return;
+    }
+    rows.push({ ...row, email: row.email.toLowerCase(), language: row.language || 'sl' });
+  });
+  return { rows, errors };
+}
+
+function importUsers(rows, includeNew) {
+  let added = 0;
+  let updated = 0;
+  for (const r of rows) {
+    const existing = users.find((u) => u.email === r.email);
+    if (existing) {
+      Object.assign(existing, { name: r.name, role: r.role, department: r.department, language: r.language });
+      updated += 1;
+    } else {
+      addUser({ ...r, included: includeNew });
+      added += 1;
+    }
+  }
+  return { added, updated };
+}
+
+function setIncluded(u, included) {
+  u.included = included;
+  if (!included) {
+    // izključenemu uporabniku se nedostavljene simulacije prekličejo
+    for (let i = deliveries.length - 1; i >= 0; i--) if (deliveries[i].userId === u.id) deliveries.splice(i, 1);
+  }
+}
+
+const publicUser = (u) => ({
+  id: u.id,
+  name: u.name,
+  email: u.email,
+  role: u.role,
+  department: u.department,
+  language: u.language,
+  included: u.included,
+  level: u.level,
+  points: u.points,
+  simulations: u.history.length,
+  reported: u.history.filter((h) => h.outcome === 'success').length,
+  skipReason: skipReason(u), // zakaj uporabnik trenutno ne more v nov plan (null = lahko)
 });
-messages.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
-log('sistem', 'Izhodiščna simulacija dostavljena', 'taktika: avtoriteta, težavnost 2');
+
+// Imenik (kdo je uvožen in kdo je vključen) se shrani na disk, da preživi ponovni zagon.
+// Zgodovina odzivov, nabiralniki in plani ostanejo v pomnilniku kot preostanek prototipa.
+const USERS_FILE = fileURLToPath(new URL('./.uporabniki.json', import.meta.url));
+const DIRECTORY_FIELDS = ['id', 'name', 'email', 'role', 'department', 'language', 'included'];
+const saveUsers = () =>
+  writeFileSync(USERS_FILE, JSON.stringify(users.map((u) => Object.fromEntries(DIRECTORY_FIELDS.map((k) => [k, u[k]]))), null, 2));
+
+const demoUser = addUser({ id: 'U-1042', name: 'Luka Horvat', email: 'luka.horvat@podjetje.si', role: 'Razvijalec', department: 'Razvoj' });
+deliverBaseline(demoUser);
+activeUserId = demoUser.id;
+if (existsSync(USERS_FILE)) {
+  for (const saved of JSON.parse(readFileSync(USERS_FILE, 'utf8'))) {
+    const u = userById(saved.id);
+    if (u) Object.assign(u, saved);
+    else addUser(saved);
+  }
+}
 
 const monthKey = (iso) => iso.slice(0, 7);
 const spentThisMonth = () => {
   const m = monthKey(new Date().toISOString());
   return round(transactions.filter((t) => monthKey(t.at) === m).reduce((s, t) => s + t.amount, 0), 4);
 };
-const simsThisMonth = () => {
+const simsThisMonth = (u) => {
   const m = monthKey(new Date().toISOString());
-  return messages.filter((x) => x.simulation && monthKey(x.receivedAt) === m).length + deliveries.length;
+  return messages.filter((x) => x.userId === u.id && x.simulation && monthKey(x.receivedAt) === m).length + deliveries.filter((d) => d.userId === u.id).length;
 };
 
 // ---------------------------------------------------------------------------
@@ -300,7 +415,7 @@ async function handleAgentService(req, res, agent) {
 // ---------------------------------------------------------------------------
 // Glavni AI-agent
 // ---------------------------------------------------------------------------
-function analyzeUser() {
+function analyzeUser(user) {
   const last = user.history[0];
   if (last && last.outcome === 'fail') {
     return {
@@ -308,6 +423,13 @@ function analyzeUser() {
       difficulty: user.level,
       reason: `Uporabnik je nasedel taktiki »${TACTICS[last.tactic].label}«. Ponovna vaja na isti taktiki pri težavnosti ${user.level}, da utrdi prepoznavanje.`,
     };
+  }
+  if (!last) {
+    // brez lastne zgodovine izhaja iz anonimizirane analitike: najšibkejša taktika oddelka
+    const weak = ORG.find((d) => d.name === user.department && d.n >= 5)?.weak;
+    if (weak) {
+      return { tactic: weak, difficulty: user.level, reason: `Prva simulacija. Uporabnik še nima zgodovine, zato agent izhaja iz najšibkejše taktike oddelka ${user.department}: »${TACTICS[weak].label}«.` };
+    }
   }
   const ranked = ALL_TACTICS
     .filter((t) => t !== last?.tactic)
@@ -322,14 +444,15 @@ function analyzeUser() {
     ? `Uporabnik je prepoznal prejšnji napad, zato se težavnost dvigne na ${user.level}.`
     : last?.outcome === 'neutral'
       ? 'Uporabnik sporočilo prezrl, a ga ni prijavil. Težavnost ostane enaka.'
-      : 'Prva prilagojena simulacija.';
+      : 'Prva simulacija.';
   const novelty = user.stats[tactic].seen === 0 ? 'še ni bila preizkušena' : 'ima najvišje tveganje';
   return { tactic, difficulty: user.level, reason: `${why} Taktika »${TACTICS[tactic].label}« ${novelty}.` };
 }
 
-function evaluateAgents(tactic, lastChannel) {
+// reserved: znesek, ki so ga v istem planu že rezervirali uporabniki pred tem
+function evaluateAgents(user, tactic, lastChannel, reserved = 0) {
   const reviewer = agentById('ethicsguard');
-  const budgetLeft = round(policy.monthlyBudget - spentThisMonth(), 4);
+  const budgetLeft = round(policy.monthlyBudget - spentThisMonth() - reserved, 4);
   return agents
     .filter((a) => a.kind === 'generator')
     .map((a) => {
@@ -342,40 +465,74 @@ function evaluateAgents(tactic, lastChannel) {
       if (policy.dataMinimization && a.requiresPersonalData) reasons.push('zahteva osebne podatke');
       if (a.price > policy.maxPerTx) reasons.push(`cena ${a.price} > limit ${policy.maxPerTx}`);
       if (a.price + reviewer.price > budgetLeft) reasons.push('presega preostanek proračuna');
-      if (a.price + reviewer.price > wallet.balance) reasons.push('premalo sredstev v denarnici');
+      if (a.price + reviewer.price > wallet.balance - reserved) reasons.push('premalo sredstev v denarnici');
       const eligible = reasons.length === 0;
-      const fit = (a.techFocus && /razvij|admin|it/i.test(user.role) ? 4 : 0) + (a.channel !== lastChannel ? 3 : 0);
+      const fit = (a.techFocus && /razvij|admin|devops|inženir|\bit\b/i.test(user.role) ? 4 : 0) + (a.channel !== lastChannel ? 3 : 0);
       const score = round(a.rating * 20 - a.price * 30 + fit, 1);
       return { id: a.id, name: a.name, channel: a.channel, price: a.price, rating: a.rating, eligible, reasons, score: eligible ? score : null };
     })
     .sort((x, y) => (y.score ?? -1) - (x.score ?? -1));
 }
 
-function createPlan() {
-  if (simsThisMonth() >= policy.maxSimsPerMonth) {
-    log('glavni agent', 'Plan zavrnjen', 'dosežena mesečna omejitev simulacij');
-    return { error: `Dosežena omejitev ${policy.maxSimsPerMonth} simulacij na mesec. Uporabnika ne preobremenjujemo.` };
-  }
-  const analysis = analyzeUser();
-  const lastChannel = messages.find((m) => m.simulation)?.channel;
-  const candidates = evaluateAgents(analysis.tactic, lastChannel);
+// Uporabnik ne dobi nove simulacije, dokler se ne odzove na prejšnjo (ali ta še čaka na dostavo).
+const hasOpenSimulation = (u) => userMessages(u).some((m) => m.simulation && !m.resolved) || deliveries.some((d) => d.userId === u.id);
+
+function skipReason(u) {
+  if (!u) return 'uporabnik ne obstaja';
+  if (!u.included) return 'ni vključen v program simulacij';
+  if (hasOpenSimulation(u)) return 'še ni odziva na prejšnjo simulacijo';
+  if (simsThisMonth(u) >= policy.maxSimsPerMonth) return `dosežena omejitev ${policy.maxSimsPerMonth} simulacij na mesec`;
+  return null;
+}
+
+function planItem(user, reserved) {
+  const analysis = analyzeUser(user);
+  const lastChannel = userMessages(user).find((m) => m.simulation)?.channel;
+  const candidates = evaluateAgents(user, analysis.tactic, lastChannel, reserved);
   const chosen = candidates.find((c) => c.eligible);
   const reviewer = agentById('ethicsguard');
-  const plan = {
-    id: randomUUID().slice(0, 8),
-    createdAt: new Date().toISOString(),
+  return {
+    userId: user.id,
     analysis: { ...analysis, tacticLabel: TACTICS[analysis.tactic].label },
     candidates,
     chosen: chosen ? { id: chosen.id, name: chosen.name, price: chosen.price, channel: chosen.channel } : null,
-    reviewer: { id: reviewer.id, name: reviewer.name, price: reviewer.price },
     estimatedCost: chosen ? round(chosen.price + reviewer.price, 4) : 0,
     dataShared: { vloga: user.role, oddelek: user.department, jezik: user.language, taktika: analysis.tactic, tezavnost: analysis.difficulty, razlicica: user.stats[analysis.tactic].seen },
+    status: chosen ? 'planned' : 'no_agent',
+  };
+}
+
+// En plan zajema vse izbrane uporabnike: ena odobritev, nato plačilo x402 in simulacija za vsakega posebej.
+function createPlan(userIds) {
+  const reviewer = agentById('ethicsguard');
+  const items = [];
+  const skipped = [];
+  let reserved = 0;
+  for (const id of new Set(userIds)) {
+    const u = userById(id);
+    const reason = skipReason(u);
+    if (reason) {
+      skipped.push({ userId: id, reason });
+      continue;
+    }
+    const item = planItem(u, reserved);
+    reserved = round(reserved + item.estimatedCost, 4);
+    items.push(item);
+  }
+  const ready = items.filter((i) => i.chosen);
+  const plan = {
+    id: randomUUID().slice(0, 8),
+    createdAt: new Date().toISOString(),
+    items,
+    skipped,
+    reviewer: { id: reviewer.id, name: reviewer.name, price: reviewer.price },
+    estimatedCost: reserved,
     dataWithheld: ['ime in priimek', 'e-poštni naslov', 'vsebina nabiralnika', 'zgodovina odzivov'],
     requiresApproval: policy.requireApproval,
-    status: chosen ? (policy.requireApproval ? 'pending' : 'approved') : 'no_agent',
+    status: ready.length ? (policy.requireApproval ? 'pending' : 'approved') : 'no_agent',
   };
   plans.set(plan.id, plan);
-  log('glavni agent', 'Pripravljen plan', chosen ? `${chosen.name}, taktika ${analysis.tactic}, ocena ${plan.estimatedCost} USDC` : 'ni primernega agenta');
+  log('glavni agent', 'Pripravljen plan', `${ready.length} uporabnikov, ocena ${plan.estimatedCost} USDC${skipped.length ? `, ${skipped.length} izpuščenih` : ''}`);
   return plan;
 }
 
@@ -452,14 +609,16 @@ function randomDeliveryTime() {
   return d.toISOString();
 }
 
-async function executePlan(plan, emit) {
-  plan.status = 'running';
-  const generator = agentById(plan.chosen.id);
+async function executeItem(plan, item, emit) {
+  item.status = 'running';
+  const user = userById(item.userId);
+  const generator = agentById(item.chosen.id);
   const reviewer = agentById(plan.reviewer.id);
   try {
-    emit('step', { kind: 'info', title: 'Minimizacija podatkov', detail: `Pošiljam samo: ${Object.entries(plan.dataShared).map(([k, v]) => `${k}=${v}`).join(', ')}` });
-    await sleep(400);
-    const gen = await payAndCall(generator, { tactic: plan.analysis.tactic, difficulty: plan.analysis.difficulty, role: user.role, department: user.department, language: user.language, variant: plan.dataShared.razlicica }, emit);
+    if (!user.included) throw new Error(`Uporabnik ${user.id} je bil medtem izključen iz programa`);
+    emit('step', { kind: 'info', title: 'Minimizacija podatkov', detail: `Pošiljam samo: ${Object.entries(item.dataShared).map(([k, v]) => `${k}=${v}`).join(', ')}` });
+    await sleep(300);
+    const gen = await payAndCall(generator, { tactic: item.analysis.tactic, difficulty: item.analysis.difficulty, role: user.role, department: user.department, language: user.language, variant: item.dataShared.razlicica }, emit);
     const scenario = gen.body.scenario;
     emit('step', { kind: 'info', title: 'Prejeta simulacija', detail: `${CHANNELS[scenario.channel]} · »${scenario.subject}« · težavnost ${scenario.difficulty}` });
 
@@ -471,31 +630,45 @@ async function executePlan(plan, emit) {
       id: randomUUID().slice(0, 8),
       deliverAt: randomDeliveryTime(),
       planId: plan.id,
+      userId: user.id,
       message: {
         ...scenario,
+        userId: user.id,
         simulation: true,
         agentId: generator.id,
         agentName: generator.name,
         cost: round(gen.tx.amount + rev.tx.amount, 4),
         txHashes: [gen.tx.txHash, rev.tx.txHash],
         realism: rev.body.realism,
-        reason: plan.analysis.reason,
+        reason: item.analysis.reason,
       },
     };
     deliveries.push(delivery);
-    plan.status = 'done';
-    plan.totalCost = delivery.message.cost;
-    plan.deliveryId = delivery.id;
-    log('glavni agent', 'Simulacija načrtovana', `dostava ob naključnem času: ${delivery.deliverAt}`);
+    item.status = 'done';
+    item.totalCost = delivery.message.cost;
+    item.deliveryId = delivery.id;
+    log('glavni agent', 'Simulacija načrtovana', `${user.id}, dostava ob naključnem času: ${delivery.deliverAt}`);
     emit('step', { kind: 'ok', title: 'Simulacija načrtovana', detail: `Dostava ob naključnem času v delovnem času: ${new Date(delivery.deliverAt).toLocaleString('sl-SI')}` });
-    emit('done', { plan, delivery: { id: delivery.id, deliverAt: delivery.deliverAt } });
   } catch (err) {
-    plan.status = 'failed';
-    plan.error = err.message;
-    log('glavni agent', 'Izvedba neuspešna', err.message);
-    emit('step', { kind: 'error', title: 'Izvedba prekinjena', detail: err.message });
-    emit('done', { plan });
+    item.status = 'failed';
+    item.error = err.message;
+    log('glavni agent', 'Izvedba neuspešna', `${user.id}: ${err.message}`);
+    emit('step', { kind: 'error', title: 'Izvedba za uporabnika prekinjena', detail: err.message });
   }
+}
+
+async function executePlan(plan, emit) {
+  plan.status = 'running';
+  const ready = plan.items.filter((i) => i.chosen);
+  for (const [n, item] of ready.entries()) {
+    emit('step', { kind: 'user', title: `Uporabnik ${item.userId} (${n + 1}/${ready.length})`, detail: `${item.analysis.tacticLabel}, težavnost ${item.analysis.difficulty}/5 · ${item.chosen.name}` });
+    await executeItem(plan, item, emit);
+  }
+  const done = ready.filter((i) => i.status === 'done').length;
+  plan.totalCost = round(ready.reduce((s, i) => s + (i.totalCost || 0), 0), 4);
+  plan.status = done === ready.length ? 'done' : done ? 'partial' : 'failed';
+  emit('step', { kind: done ? 'ok' : 'error', title: `Zaključeno: ${done}/${ready.length} simulacij načrtovanih`, detail: `Skupaj plačano ${plan.totalCost} USDC` });
+  emit('done', { plan });
 }
 
 // ---------------------------------------------------------------------------
@@ -513,6 +686,7 @@ function respond(msg, actionId, responseMs) {
   const action = msg.actions.find((a) => a.id === actionId);
   if (!action) return { error: 'Neznano dejanje.' };
   const outcome = action.outcome;
+  const user = userById(msg.userId);
   const s = user.stats[msg.tactic];
   s.seen += 1;
   if (outcome === 'fail') s.failed += 1;
@@ -619,12 +793,14 @@ function route(method, pattern, handler) {
 }
 
 function publicState() {
+  const user = activeUser();
   return {
     user,
+    users: users.map(({ id, name, department, included }) => ({ id, name, department, included })),
     wallet,
     budget: { limit: policy.monthlyBudget, spent: spentThisMonth() },
-    sims: { thisMonth: simsThisMonth(), max: policy.maxSimsPerMonth },
-    pendingDeliveries: deliveries.map((d) => ({ id: d.id, deliverAt: d.deliverAt, channel: d.message.channel })),
+    sims: { thisMonth: simsThisMonth(user), max: policy.maxSimsPerMonth },
+    pendingDeliveries: deliveries.filter((d) => d.userId === user.id).map((d) => ({ id: d.id, deliverAt: d.deliverAt, channel: d.message.channel })),
     tactics: TACTICS,
     channels: CHANNELS,
   };
@@ -653,7 +829,7 @@ route('GET', '/api/state', async (req, res) => {
   await refreshBalance();
   sendJson(res, 200, publicState());
 });
-route('GET', '/api/messages', (req, res) => sendJson(res, 200, messages));
+route('GET', '/api/messages', (req, res) => sendJson(res, 200, userMessages(activeUser())));
 route('POST', '/api/messages/:id/read', (req, res, p) => {
   const m = messages.find((x) => x.id === p.id);
   if (m) m.read = true;
@@ -675,6 +851,31 @@ route('POST', '/api/deliveries/:id/deliver', (req, res, p) => {
   sendJson(res, 200, { message: msg, state: publicState() });
 });
 
+// --- uporabniki: uvoz, vključitev v program, preklop prikaza
+route('GET', '/api/users', (req, res) => sendJson(res, 200, users.map(publicUser)));
+route('POST', '/api/users/import', async (req, res) => {
+  const { csv, includeNew = true } = await readBody(req);
+  const parsed = parseUsersCsv(csv);
+  if (parsed.error) return sendJson(res, 400, { error: parsed.error });
+  const result = importUsers(parsed.rows, Boolean(includeNew));
+  saveUsers();
+  log('skrbnik', 'Uvoz uporabnikov', `${result.added} novih, ${result.updated} posodobljenih${parsed.errors.length ? `, ${parsed.errors.length} preskočenih` : ''}`);
+  sendJson(res, 200, { ...result, skipped: parsed.errors, users: users.map(publicUser) });
+});
+route('POST', '/api/users/include', async (req, res) => {
+  const { ids = [], department, included } = await readBody(req);
+  const targets = department ? users.filter((u) => u.department === department) : users.filter((u) => ids.includes(u.id));
+  targets.forEach((u) => setIncluded(u, Boolean(included)));
+  saveUsers();
+  log('skrbnik', included ? 'Vključeni v program' : 'Izključeni iz programa', department ? `oddelek ${department} (${targets.length})` : targets.map((u) => u.id).join(', '));
+  sendJson(res, 200, users.map(publicUser));
+});
+route('POST', '/api/users/:id/activate', (req, res, p) => {
+  if (!userById(p.id)) return sendJson(res, 404, { error: 'ni uporabnika' });
+  activeUserId = p.id;
+  sendJson(res, 200, publicState());
+});
+
 route('GET', '/api/agents', (req, res) => sendJson(res, 200, agents.map(({ ...a }) => a)));
 route('POST', '/api/agents/:id/allowlist', async (req, res, p) => {
   const a = agentById(p.id);
@@ -685,18 +886,31 @@ route('POST', '/api/agents/:id/allowlist', async (req, res, p) => {
   sendJson(res, 200, a);
 });
 
-route('POST', '/api/agent/plan', (req, res) => {
-  const plan = createPlan();
-  sendJson(res, plan.error ? 409 : 200, plan);
+route('POST', '/api/agent/plan', async (req, res) => {
+  const { userIds } = await readBody(req);
+  const ids = Array.isArray(userIds) ? userIds : [activeUserId];
+  if (!ids.length) return sendJson(res, 400, { error: 'Izberite vsaj enega uporabnika.' });
+  sendJson(res, 200, createPlan(ids));
 });
 route('GET', '/api/agent/plans', (req, res) => sendJson(res, 200, [...plans.values()].reverse()));
+route('POST', '/api/agent/plans/:id/deliver', (req, res, p) => {
+  const due = deliveries.filter((d) => d.planId === p.id);
+  due.forEach((d) => {
+    deliveries.splice(deliveries.indexOf(d), 1);
+    addMessage(d.message);
+  });
+  const plan = plans.get(p.id);
+  if (plan) plan.delivered = true;
+  log('sistem', 'Simulacije dostavljene', `plan ${p.id}: ${due.length}`);
+  sendJson(res, 200, { delivered: due.length, state: publicState() });
+});
 route('POST', '/api/agent/plans/:id/decision', async (req, res, p) => {
   const plan = plans.get(p.id);
   if (!plan) return sendJson(res, 404, { error: 'ni plana' });
   if (plan.status !== 'pending') return sendJson(res, 409, { error: 'plan ni v čakanju' });
   const { approve } = await readBody(req);
   plan.status = approve ? 'approved' : 'rejected';
-  log('skrbnik', approve ? 'Plan odobren' : 'Plan zavrnjen', `${plan.chosen?.name}, ${plan.estimatedCost} USDC`);
+  log('skrbnik', approve ? 'Plan odobren' : 'Plan zavrnjen', `${plan.items.filter((i) => i.chosen).length} uporabnikov, ${plan.estimatedCost} USDC`);
   sendJson(res, 200, plan);
 });
 route('GET', '/api/agent/plans/:id/execute', async (req, res, p) => {

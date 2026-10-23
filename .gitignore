@@ -4,6 +4,7 @@ node_modules/
 # Local secrets / runtime state
 .wallet.json
 .lastnik.json
+.uporabniki.json
 .env
 .env.*
 

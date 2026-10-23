@@ -12,7 +12,7 @@ cd prototip-x402
 npm start          # ali: node server.js
 ```
 
-Odpri <http://localhost:4020>. Stanje je v pomnilniku in se ob ponovnem zagonu ponastavi.
+Odpri <http://localhost:4020>. Stanje je v pomnilniku in se ob ponovnem zagonu ponastavi. Izjema je imenik uporabnikov (uvoženi uporabniki in kdo je vključen), ki se shrani v `.uporabniki.json`. Za čist začetek to datoteko izbriši.
 
 ### Način Base Sepolia (prava plačila na testnem omrežju)
 
@@ -41,7 +41,9 @@ npm run start:sepolia
    `POST` → `402 Payment Required` → preverjanje pravil porabe → podpis avtorizacije → ponovni `POST` z glavo `X-PAYMENT` → `200 OK` + `X-PAYMENT-RESPONSE`.
    Zaporedoma se plačata dve storitvi: generiranje simulacije in neodvisen etični pregled.
 5. Simulacija je načrtovana ob naključnem času v delovnem času. Za demo klikni **»Dostavi zdaj«** in se odzovi nanjo. Po napaki agent ponovi isto taktiko pri nižji težavnosti in v drugi različici, po uspehu pa dvigne težavnost in izbere novo taktiko (npr. DevBait za razvijalca).
-6. Preglej še **Plačila x402**, **Tržnico** (odobreni seznam lahko vklapljaš), **Analitiko** (anonimizirano, oddelki z manj kot 5 osebami so skriti) in **Pravila in nadzor** (proračun, limit na transakcijo, kanali, prepovedane teme, revizijska sled).
+6. **Uporabniki**: klikni »Vstavi primer« in »Uvozi« (CSV z `ime;e-pošta;vloga;oddelek`). Uporabnike ali cele oddelke lahko trajno izključiš iz programa (npr. odsotni, novi zaposleni).
+7. **Glavni agent → Izbira uporabnikov za test**: s kljukicami (ali po oddelkih) izberi, kdo dobi simulacijo, in klikni »Pripravi plan za izbrane«. Agent za vsakega posebej izbere taktiko, težavnost in agenta. Brez zgodovine izhaja iz najšibkejše taktike oddelka v analitiki. Celoten plan odobriš enkrat, plačila x402 pa potekajo za vsakega posebej. Izpuščeni so izključeni in tisti, ki se še niso odzvali na prejšnjo simulacijo. »Dostavi vse simulacije zdaj« jih dostavi, z izbirnikom v razdelku **Zaposleni** v meniju pa odpreš nabiralnik posameznega zaposlenega.
+8. Preglej še **Plačila x402**, **Tržnico** (odobreni seznam lahko vklapljaš), **Analitiko** (anonimizirano, oddelki z manj kot 5 osebami so skriti) in **Pravila in nadzor** (proračun, limit na transakcijo, kanali, prepovedane teme, revizijska sled).
 
 Za preizkus pravil: v *Pravila in nadzor* znižaj »Največ na transakcijo« na `0.05`. Agent nato ne najde primernega ponudnika in nič ne plača.
 
@@ -58,7 +60,8 @@ scenarios.js       predloge simulacij (5 taktik × 4 kanali × 5 stopenj težavn
 |---|---|---|
 | Specializirani agenti | `POST /x402/agents/:id/service` | Plačljiva storitev. Brez plačila vrne `402` s `paymentRequirements`. |
 | Facilitator | `POST /facilitator/verify`, `/facilitator/settle` | Preveri podpis, znesek, prejemnika, rok in nonce (zaščita pred ponovitvijo) ter poravna plačilo. |
-| Glavni agent | `POST /api/agent/plan`, `GET /api/agent/plans/:id/execute` (SSE) | Analiza → izbira agenta → odobritev → plačilo x402 → načrt dostave. |
+| Uporabniki | `POST /api/users/import`, `POST /api/users/include`, `POST /api/users/:id/activate` | Uvoz CSV (psevdonimi), vključitev v program po osebi ali oddelku, preklop prikazanega uporabnika. |
+| Glavni agent | `POST /api/agent/plan` (`userIds`), `GET /api/agent/plans/:id/execute` (SSE), `POST /api/agent/plans/:id/deliver` | Za vsakega izbranega uporabnika: analiza → izbira agenta; ena odobritev → plačila x402 → načrt dostave. |
 
 Storitev agenta lahko pokličeš tudi neposredno in vidiš odgovor 402:
 

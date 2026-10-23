@@ -25,6 +25,7 @@ const S = {
   autoPlan: false,
   data: {},
   mm: { balance: null, busy: null },
+  pick: null, // uporabniki, izbrani za naslednji plan
 };
 
 const CH_ICON = { email: '✉', sms: '💬', chat: '#', glas: '☏' };
@@ -48,6 +49,9 @@ function renderChrome() {
   const unread = S.messages.filter((m) => !m.read).length;
   $('#unread').textContent = unread || '';
   $('#pending').textContent = S.plan?.status === 'pending' ? '1' : '';
+  $('#user-switch').innerHTML = st.users
+    .map((u) => `<option value="${esc(u.id)}" ${u.id === st.user.id ? 'selected' : ''}>${esc(u.name)} · ${esc(u.department)}${u.included ? '' : ' (izključen)'}</option>`)
+    .join('');
   const used = st.budget.spent / st.budget.limit;
   $('#wallet').innerHTML = `
     <div style="color:#fff;font-weight:600">Denarnica glavnega agenta</div>
@@ -170,6 +174,7 @@ function inboxView() {
   return `
     <h1>Nabiralnik</h1>
     <p class="sub">Delovni nabiralnik z vgrajenimi simulacijami. Simulacije so nenapovedane in pomešane med pristna sporočila.</p>
+    ${st.user.included ? '' : `<div class="banner"><div class="grow"><b>${esc(st.user.name)} ni vključen v program simulacij.</b> <span class="muted">Glavni agent zanj ne pripravlja simulacij. Vključite ga na strani <a href="#/uporabniki">Uporabniki</a>.</span></div></div>`}
     ${pend.length ? `<div class="banner"><div class="grow"><b>${pend.length} ${pend.length === 1 ? 'simulacija čaka' : 'simulacij čaka'} na dostavo.</b> <span class="muted">Dostavljena bo ob naključnem času v delovnem času (${dateTime(pend[0].deliverAt)}), zato je ne morete pričakovati.</span></div><button class="btn primary sm" data-deliver="${pend[0].id}">Dostavi zdaj (demo)</button></div>` : ''}
     <div class="inbox ${sel ? 'reading' : ''}">
       <div class="msg-list">${S.messages.map(messageItem).join('')}</div>
@@ -243,7 +248,7 @@ function progressView() {
   const tactics = Object.entries(u.stats);
   return `
     <h1>Moj napredek</h1>
-    <p class="sub">Psevdonim ${esc(u.id)} · ${esc(u.role)}, oddelek ${esc(u.department)}</p>
+    <p class="sub">${esc(u.name)} · psevdonim ${esc(u.id)} · ${esc(u.role)}, oddelek ${esc(u.department)}</p>
     <div class="grid cols-4">
       <div class="card stat"><div class="label">Stopnja težavnosti</div><div class="value">${u.level} / 5</div><div class="meter"><i style="width:${u.level * 20}%"></i></div></div>
       <div class="card stat"><div class="label">Točke budnosti</div><div class="value">${u.points}</div><div class="hint">+10 za vsako prijavo, več za hitro prijavo</div></div>
@@ -279,13 +284,20 @@ function progressView() {
 // Glavni agent
 // ---------------------------------------------------------------------------
 async function loadAgent() {
-  S.data.plans = await api('/api/agent/plans');
+  [S.data.plans, S.data.users] = await Promise.all([api('/api/agent/plans'), api('/api/users')]);
+  // privzeto so izbrani vsi, ki so trenutno lahko v testu
+  if (!S.pick) S.pick = new Set(S.data.users.filter((u) => !u.skipReason).map((u) => u.id));
+  for (const u of S.data.users) if (u.skipReason) S.pick.delete(u.id);
 }
+
+const userName = (id) => S.state.users.find((u) => u.id === id)?.name || id;
 
 function logHtml() {
   if (!S.runLog.length) return `<p class="muted" style="margin:0">${S.running ? 'Začenjam …' : 'Dnevnik izvajanja se prikaže po odobritvi plana.'}</p>`;
-  const icon = { request: '→', http402: '402', policy: '§', sign: '✎', paid: '✓', ok: '✓', error: '!', info: 'i' };
-  return S.runLog.map((s) => `
+  const icon = { user: '◉', request: '→', http402: '402', policy: '§', sign: '✎', paid: '✓', ok: '✓', error: '!', info: 'i' };
+  // najnovejši koraki so na vrhu
+  const running = S.running ? `<div class="step"><div class="dot">…</div><div class="muted">v teku</div></div>` : '';
+  return running + [...S.runLog].reverse().map((s) => `
     <div class="step">
       <div class="dot ${s.kind}">${icon[s.kind] || '·'}</div>
       <div>
@@ -293,59 +305,98 @@ function logHtml() {
         ${s.checks ? `<ul class="checks">${s.checks.map((c) => `<li class="${c.ok ? '' : 'no'}">${esc(c.label)}</li>`).join('')}</ul>` : ''}
         ${s.json ? `<details><summary class="small muted">Pokaži podatke</summary><pre>${esc(JSON.stringify(s.json, null, 2))}</pre></details>` : ''}
       </div>
-    </div>`).join('') + (S.running ? `<div class="step"><div class="dot">…</div><div class="muted">v teku</div></div>` : '');
+    </div>`).join('');
+}
+
+function pickerHtml() {
+  const list = S.data.users;
+  const ready = list.filter((u) => !u.skipReason);
+  const depts = [...new Set(ready.map((u) => u.department))].sort((a, b) => a.localeCompare(b, 'sl'));
+  const busy = S.running || S.plan?.status === 'pending';
+  return `
+    <div class="card">
+      <h2>1. Izbira uporabnikov za test</h2>
+      <p class="muted" style="margin-top:0">Označite, kdo naj dobi naslednjo simulacijo. Glavni agent za vsakega izbranega analizira pretekle odzive in izbere taktiko, težavnost in agenta. Celoten plan odobrite enkrat.</p>
+      <div class="row-actions" style="margin-bottom:10px">
+        <button class="btn sm" data-pick="all">Vsi pripravljeni (${ready.length})</button>
+        <button class="btn sm" data-pick="none">Počisti</button>
+        ${depts.map((d) => `<button class="btn sm" data-pick-dept="${esc(d)}">${esc(d)}</button>`).join('')}
+      </div>
+      <div class="table-wrap"><table>
+        <tr><th></th><th>Ime</th><th>Psevdonim</th><th>Oddelek</th><th>Vloga</th><th>Stopnja</th><th>Stanje</th></tr>
+        ${list.map((u) => `<tr class="${u.skipReason ? 'rejected' : ''}">
+          <td><input type="checkbox" data-pick-user="${esc(u.id)}" ${S.pick.has(u.id) ? 'checked' : ''} ${u.skipReason ? 'disabled' : ''}></td>
+          <td><b>${esc(u.name)}</b></td><td class="mono">${esc(u.id)}</td><td>${esc(u.department)}</td><td>${esc(u.role)}</td><td>${u.level}/5</td>
+          <td>${u.skipReason ? `<span class="chip">${esc(u.skipReason)}</span>` : '<span class="chip ok">pripravljen</span>'}</td>
+        </tr>`).join('')}
+      </table></div>
+      <div class="row-actions" style="margin-top:14px;align-items:center">
+        <button class="btn primary" data-plan ${S.pick.size && !busy ? '' : 'disabled'}>Pripravi plan za izbrane (${S.pick.size})</button>
+        ${busy ? '<span class="small muted">Najprej zaključite trenutni plan.</span>' : ''}
+        <span class="small muted">Uporabnike uvozite in vključite v program na strani <a href="#/uporabniki">Uporabniki</a>.</span>
+      </div>
+    </div>`;
+}
+
+const STATUS_CHIP = {
+  pending: ['warn', 'Čaka na odobritev'], approved: ['blue', 'Odobreno'], running: ['blue', 'V izvajanju'], done: ['ok', 'Zaključeno'],
+  partial: ['warn', 'Delno zaključeno'], rejected: ['bad', 'Zavrnjeno'], failed: ['bad', 'Neuspešno'], no_agent: ['bad', 'Ni primernega agenta'],
+  planned: ['', 'Načrtovano'],
+};
+
+function itemDetails(it) {
+  return `<details class="plan-item">
+    <summary><b>${esc(userName(it.userId))}</b> <span class="muted">(${esc(it.userId)})</span> · ${esc(it.analysis.tacticLabel)} ${it.analysis.difficulty}/5 · ${esc(it.chosen?.name || 'ni agenta')}</summary>
+    <div class="grid cols-2" style="margin-top:10px">
+      <dl class="kv">
+        <dt>Utemeljitev</dt><dd>${esc(it.analysis.reason)}</dd>
+        ${it.error ? `<dt>Napaka</dt><dd>${esc(it.error)}</dd>` : ''}
+      </dl>
+      <div>
+        <div class="small muted" style="margin-bottom:4px">Podatki, ki zapustijo organizacijo</div>
+        ${Object.entries(it.dataShared).map(([k, v]) => `<span class="chip blue">${esc(k)}: ${esc(v)}</span>`).join('')}
+      </div>
+    </div>
+    <div class="table-wrap" style="margin-top:8px"><table>
+      <tr><th>Agent</th><th>Kanal</th><th>Cena</th><th>Ocena</th><th>Točke</th><th>Odločitev</th></tr>
+      ${it.candidates.map((c) => {
+        const chosen = it.chosen?.id === c.id;
+        return `<tr class="${chosen ? 'chosen' : c.eligible ? '' : 'rejected'}"><td><b>${esc(c.name)}</b></td><td>${esc(S.state.channels[c.channel])}</td><td>${usdc(c.price)}</td><td>★ ${c.rating}</td><td>${c.score ?? '–'}</td><td>${chosen ? '<span class="chip ok">Izbran</span>' : c.eligible ? '<span class="chip">Primeren, nižje točke</span>' : c.reasons.map((r) => `<span class="chip bad">${esc(r)}</span>`).join('')}</td></tr>`;
+      }).join('')}
+    </table></div>
+  </details>`;
 }
 
 function planHtml(p) {
   if (S.planError) return `<div class="card"><h2>Plan ni bil pripravljen</h2><p class="muted">${esc(S.planError)}</p></div>`;
-  if (!p) {
-    return `<div class="card"><h2>Ni aktivnega plana</h2><p class="muted">Glavni agent pripravi plan po vsakem odzivu uporabnika na simulacijo. Lahko ga sprožite tudi ročno.</p><button class="btn primary" data-plan>Pripravi naslednjo simulacijo</button></div>`;
-  }
-  const statusChip = { pending: ['warn', 'Čaka na odobritev'], approved: ['blue', 'Odobreno'], running: ['blue', 'V izvajanju'], done: ['ok', 'Zaključeno'], rejected: ['bad', 'Zavrnjeno'], failed: ['bad', 'Neuspešno'], no_agent: ['bad', 'Ni primernega agenta'] }[p.status];
+  if (!p) return '';
+  const chip = STATUS_CHIP[p.status];
+  const ready = p.items.filter((i) => i.chosen);
+  const hasDeliveries = p.items.some((i) => i.deliveryId) && !p.delivered;
   return `
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px">
-        <h2 style="margin:0">Plan #${esc(p.id)}</h2><span class="chip ${statusChip[0]}">${statusChip[1]}</span>
+        <h2 style="margin:0">2. Plan #${esc(p.id)}</h2><span class="chip ${chip[0]}">${chip[1]}</span>
       </div>
-      <div class="grid cols-2">
-        <div>
-          <h3>1. Analiza uporabnika ${esc(S.state.user.id)}</h3>
-          <dl class="kv">
-            <dt>Ciljna taktika</dt><dd><b>${esc(p.analysis.tacticLabel)}</b></dd>
-            <dt>Težavnost</dt><dd>${p.analysis.difficulty}/5</dd>
-            <dt>Utemeljitev</dt><dd>${esc(p.analysis.reason)}</dd>
-          </dl>
-        </div>
-        <div>
-          <h3>Podatki, ki zapustijo organizacijo</h3>
-          <div>${Object.entries(p.dataShared).map(([k, v]) => `<span class="chip blue">${esc(k)}: ${esc(v)}</span>`).join('')}</div>
-          <div style="margin-top:6px">${p.dataWithheld.map((x) => `<span class="chip">✗ ${esc(x)}</span>`).join('')}</div>
-        </div>
-      </div>
-      <h3 style="margin-top:18px">2. Izbira agenta na tržnici</h3>
       <div class="table-wrap"><table>
-        <tr><th>Agent</th><th>Kanal</th><th>Cena</th><th>Ocena</th><th>Točke</th><th>Odločitev</th></tr>
-        ${p.candidates.map((c) => {
-          const chosen = p.chosen?.id === c.id;
-          return `<tr class="${chosen ? 'chosen' : c.eligible ? '' : 'rejected'}"><td><b>${esc(c.name)}</b></td><td>${esc(S.state.channels[c.channel])}</td><td>${usdc(c.price)}</td><td>★ ${c.rating}</td><td>${c.score ?? '–'}</td><td>${chosen ? '<span class="chip ok">Izbran</span>' : c.eligible ? '<span class="chip">Primeren, nižje točke</span>' : c.reasons.map((r) => `<span class="chip bad">${esc(r)}</span>`).join('')}</td></tr>`;
-        }).join('')}
+        <tr><th>Uporabnik</th><th>Taktika</th><th>Težavnost</th><th>Agent</th><th>Kanal</th><th>Cena</th><th>Stanje</th></tr>
+        ${p.items.map((it) => `<tr class="${it.chosen ? '' : 'rejected'}"><td><b>${esc(userName(it.userId))}</b> <span class="muted mono">${esc(it.userId)}</span></td><td>${esc(it.analysis.tacticLabel)}</td><td>${it.analysis.difficulty}/5</td><td>${esc(it.chosen?.name || '–')}</td><td>${it.chosen ? esc(S.state.channels[it.chosen.channel]) : '–'}</td><td>${it.chosen ? usdc(it.estimatedCost) : '–'}</td><td><span class="chip ${STATUS_CHIP[it.status][0]}">${STATUS_CHIP[it.status][1]}</span></td></tr>`).join('')}
+        ${p.skipped.map((x) => `<tr class="rejected"><td><b>${esc(userName(x.userId))}</b> <span class="muted mono">${esc(x.userId)}</span></td><td colspan="6"><span class="chip">Izpuščen: ${esc(x.reason)}</span></td></tr>`).join('')}
       </table></div>
-      ${p.chosen ? `
-      <h3 style="margin-top:18px">3. Naročilo in plačilo prek x402</h3>
-      <dl class="kv">
-        <dt>Generiranje</dt><dd>${esc(p.chosen.name)} · ${usdc(p.chosen.price)}</dd>
-        <dt>Etični pregled</dt><dd>${esc(p.reviewer.name)} · ${usdc(p.reviewer.price)}</dd>
-        <dt>Skupaj</dt><dd><b>${usdc(p.estimatedCost)}</b> <span class="muted">(preostanek proračuna ${usdc(S.state.budget.limit - S.state.budget.spent)})</span></dd>
-      </dl>` : ''}
+      <dl class="kv" style="margin-top:12px">
+        <dt>Simulacij</dt><dd>${ready.length} · vsaka = generiranje + etični pregled (${esc(p.reviewer.name)}, ${usdc(p.reviewer.price)})</dd>
+        <dt>Skupaj</dt><dd><b>${usdc(p.totalCost ?? p.estimatedCost)}</b> <span class="muted">(preostanek proračuna ${usdc(S.state.budget.limit - S.state.budget.spent)})</span></dd>
+        <dt>Ostane v organizaciji</dt><dd>${p.dataWithheld.map((x) => `<span class="chip">✗ ${esc(x)}</span>`).join('')}</dd>
+      </dl>
+      <h3 style="margin-top:16px">Analiza in izbira agenta po uporabnikih</h3>
+      ${p.items.map(itemDetails).join('')}
       ${p.status === 'pending' ? `
         <div class="banner" style="margin:16px 0 0;background:var(--warn-soft);border-color:#f1d9a8">
           <div class="grow"><b>Potrebna je človeška odobritev.</b> <span class="muted">Agent brez potrditve skrbnika ne naroči in ne plača nobene storitve.</span></div>
           <button class="btn danger sm" data-decide="0">Zavrni</button>
-          <button class="btn ok sm" data-decide="1">Odobri in plačaj</button>
+          <button class="btn ok sm" data-decide="1">Odobri in plačaj (${usdc(p.estimatedCost)})</button>
         </div>` : ''}
-      ${['done', 'rejected', 'failed', 'no_agent'].includes(p.status) ? `<div class="row-actions" style="margin-top:16px">
-        ${p.status === 'done' && S.state.pendingDeliveries.some((d) => d.id === p.deliveryId) ? `<button class="btn primary" data-deliver="${p.deliveryId}">Dostavi simulacijo zdaj (demo)</button>` : ''}
-        <button class="btn" data-plan>Pripravi nov plan</button></div>` : ''}
+      ${hasDeliveries && ['done', 'partial'].includes(p.status) ? `<div class="row-actions" style="margin-top:16px"><button class="btn primary" data-deliver-plan="${p.id}">Dostavi vse simulacije zdaj (demo)</button></div>` : ''}
     </div>`;
 }
 
@@ -354,28 +405,29 @@ function agentView() {
   const plans = (S.data.plans || []).filter((p) => p.id !== S.plan?.id).slice(0, 6);
   return `
     <h1>Glavni agent</h1>
-    <p class="sub">Avtonomni kupec storitev: analizira uporabnika, izbere specializiranega agenta, plača prek x402 in načrtuje dostavo.</p>
+    <p class="sub">Avtonomni kupec storitev: za izbrane uporabnike analizira pretekle odzive, izbere specializirane agente, plača prek x402 in načrtuje dostavo.</p>
     <div class="grid cols-4">
       <div class="card stat"><div class="label">Stanje denarnice</div><div class="value">${usdc(st.wallet.balance)}</div><div class="hint mono">${esc(st.wallet.address.slice(0, 14))}…</div></div>
       <div class="card stat"><div class="label">Mesečni proračun</div><div class="value">${usdc(st.budget.spent)}</div><div class="meter"><i style="width:${(st.budget.spent / st.budget.limit) * 100}%"></i></div><div class="hint">od ${usdc(st.budget.limit)}</div></div>
-      <div class="card stat"><div class="label">Simulacije ta mesec</div><div class="value">${st.sims.thisMonth} / ${st.sims.max}</div><div class="hint">omejitev proti preobremenitvi</div></div>
-      <div class="card stat"><div class="label">Stopnja uporabnika</div><div class="value">${st.user.level} / 5</div><div class="hint">prilagodljiva težavnost</div></div>
+      <div class="card stat"><div class="label">Pripravljenih za test</div><div class="value">${S.data.users.filter((u) => !u.skipReason).length} / ${S.data.users.length}</div><div class="hint">vključeni, brez odprte simulacije</div></div>
+      <div class="card stat"><div class="label">Izbranih</div><div class="value">${S.pick.size}</div><div class="hint">največ ${st.sims.max} simulacij na osebo na mesec</div></div>
     </div>
-    <div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);margin-top:16px" id="agent-grid">
+    <div style="margin-top:16px">${pickerHtml()}</div>
+    ${S.plan || S.planError ? `<div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);margin-top:16px" id="agent-grid">
       <div>${planHtml(S.plan)}</div>
       <div class="card"><h2>Dnevnik izvajanja (x402)</h2><div class="log" id="log">${logHtml()}</div></div>
-    </div>
+    </div>` : ''}
     ${plans.length ? `<div class="card" style="margin-top:16px"><h2>Pretekli plani</h2><div class="table-wrap"><table>
-      <tr><th>Čas</th><th>Taktika</th><th>Agent</th><th>Strošek</th><th>Status</th></tr>
-      ${plans.map((p) => `<tr><td>${dateTime(p.createdAt)}</td><td>${esc(p.analysis.tacticLabel)} · ${p.analysis.difficulty}/5</td><td>${esc(p.chosen?.name || '–')}</td><td>${p.totalCost ? usdc(p.totalCost) : '–'}</td><td>${esc(p.status)}</td></tr>`).join('')}
+      <tr><th>Čas</th><th>Uporabnikov</th><th>Strošek</th><th>Status</th></tr>
+      ${plans.map((p) => `<tr><td>${dateTime(p.createdAt)}</td><td>${p.items.filter((i) => i.chosen).length}${p.skipped.length ? ` <span class="muted">(+${p.skipped.length} izpuščenih)</span>` : ''}</td><td>${p.totalCost ? usdc(p.totalCost) : '–'}</td><td>${esc(STATUS_CHIP[p.status][1])}</td></tr>`).join('')}
     </table></div></div>` : ''}`;
 }
 
-async function makePlan() {
+async function makePlan(userIds = [...S.pick]) {
   S.planError = null;
   S.runLog = [];
   try {
-    S.plan = await api('/api/agent/plan', { method: 'POST' });
+    S.plan = await api('/api/agent/plan', { method: 'POST', body: { userIds } });
   } catch (e) {
     S.plan = null;
     S.planError = e.message;
@@ -410,12 +462,22 @@ function runPlan() {
     if (d.plan) S.plan = d.plan;
     await refreshState();
     if (currentView() === 'agent') render();
-    if (d.delivery) toast(`Simulacija je pripravljena in plačana. <a href="#/nabiralnik">Nabiralnik →</a>`);
+    const n = d.plan?.items.filter((i) => i.status === 'done').length;
+    if (n) toast(`Pripravljenih in plačanih simulacij: ${n}.`);
   });
   es.onerror = () => {
     es.close();
     S.running = false;
   };
+}
+
+async function deliverPlan(id) {
+  const r = await api(`/api/agent/plans/${id}/deliver`, { method: 'POST' });
+  S.plan.delivered = true;
+  S.state = r.state;
+  S.messages = await api('/api/messages');
+  render();
+  toast(`Dostavljenih simulacij: ${r.delivered}. Nabiralnik posameznega zaposlenega izberete v meniju pod »Zaposleni«.`, 7000);
 }
 
 async function deliver(id) {
@@ -426,6 +488,100 @@ async function deliver(id) {
   if (currentView() === 'nabiralnik') render();
   else location.hash = '#/nabiralnik';
   toast('Novo sporočilo v nabiralniku.');
+}
+
+// ---------------------------------------------------------------------------
+// Uporabniki: uvoz in izbira, kdo je vključen v program simulacij
+// ---------------------------------------------------------------------------
+const SAMPLE_CSV = `ime;e-pošta;vloga;oddelek
+Luka Horvat;luka.horvat@podjetje.si;Razvijalec;Razvoj
+Nina Zupan;nina.zupan@podjetje.si;DevOps inženir;Razvoj
+Maja Kos;maja.kos@podjetje.si;Računovodja;Finance
+Tomaž Golob;tomaz.golob@podjetje.si;Finančni analitik;Finance
+Petra Mlakar;petra.mlakar@podjetje.si;Prodajni svetovalec;Prodaja
+Rok Vidmar;rok.vidmar@podjetje.si;Sistemski administrator;IT
+Eva Kralj;eva.kralj@podjetje.si;Kadrovnica;Kadrovska služba
+Marko Novak;marko.novak@podjetje.si;Direktor;Uprava`;
+
+async function loadUsers() {
+  S.data.users = await api('/api/users');
+}
+
+function usersView() {
+  const list = S.data.users;
+  const depts = [...new Set(list.map((u) => u.department))].sort((a, b) => a.localeCompare(b, 'sl'));
+  const included = list.filter((u) => u.included).length;
+  return `
+    <h1>Uporabniki</h1>
+    <p class="sub">Uvoz zaposlenih in izbira, kdo je vključen v program simulacij. Ime in e-pošta ostaneta v organizaciji. Glavni agent in zunanji agenti vidijo samo psevdonim, vlogo, oddelek in jezik. Koga vključiti v posamezen test, izberete na strani <a href="#/agent">Glavni agent</a>.</p>
+    <div class="grid cols-4">
+      <div class="card stat"><div class="label">Uporabnikov</div><div class="value">${list.length}</div></div>
+      <div class="card stat"><div class="label">Vključenih v program</div><div class="value">${included}</div><div class="hint">${list.length - included} izključenih</div></div>
+      <div class="card stat"><div class="label">Oddelkov</div><div class="value">${depts.length}</div></div>
+      <div class="card stat"><div class="label">Simulacij na osebo</div><div class="value">${S.state.sims.max} / mesec</div><div class="hint">nastavite v Pravilih</div></div>
+    </div>
+    <form class="card" id="import-form" style="margin-top:16px">
+      <h2>Uvoz iz CSV</h2>
+      <p class="muted" style="margin-top:0">Stolpci: <code>ime</code>, <code>e-pošta</code>, <code>vloga</code>, <code>oddelek</code> in neobvezno <code>jezik</code>. Ločilo je vejica ali podpičje. Obstoječi uporabniki (isti e-naslov) se posodobijo, novi dobijo psevdonim.</p>
+      <div class="field"><textarea name="csv" placeholder="ime;e-pošta;vloga;oddelek&#10;Maja Kos;maja.kos@podjetje.si;Računovodja;Finance"></textarea></div>
+      <div class="row-actions" style="align-items:center">
+        <input type="file" accept=".csv,text/csv" id="csv-file">
+        <button type="button" class="btn sm" data-sample-csv>Vstavi primer</button>
+        <label class="switch"><input type="checkbox" name="includeNew" checked>Nove uporabnike takoj vključi v program</label>
+        <button class="btn primary">Uvozi</button>
+      </div>
+    </form>
+    <div class="card" style="margin-top:16px">
+      <h2>Vključenost po oddelkih</h2>
+      <div class="dept-chips">
+        ${depts.map((d) => {
+          const all = list.filter((u) => u.department === d);
+          const on = all.filter((u) => u.included).length;
+          return `<span class="dept"><b>${esc(d)}</b> <span class="muted">${on}/${all.length}</span>
+            <button class="btn sm" data-dept="${esc(d)}" data-on="1" ${on === all.length ? 'disabled' : ''}>Vključi</button>
+            <button class="btn sm" data-dept="${esc(d)}" data-on="0" ${on === 0 ? 'disabled' : ''}>Izključi</button></span>`;
+        }).join('')}
+      </div>
+      <p class="small muted" style="margin-bottom:0">Izključite npr. osebe na daljši odsotnosti, nove zaposlene v prvem mesecu ali varnostno ekipo. Izključenim se prekličejo še nedostavljene simulacije.</p>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h2>Seznam uporabnikov</h2>
+      <div class="table-wrap"><table>
+        <tr><th>Vključen</th><th>Psevdonim</th><th>Ime</th><th>E-pošta</th><th>Vloga</th><th>Oddelek</th><th>Stopnja</th><th>Prijavljene</th><th></th></tr>
+        ${list.map((u) => `<tr class="${u.included ? '' : 'rejected'}">
+          <td><label class="switch"><input type="checkbox" data-include="${esc(u.id)}" ${u.included ? 'checked' : ''}></label></td>
+          <td class="mono">${esc(u.id)}</td><td><b>${esc(u.name)}</b></td><td class="muted">${esc(u.email)}</td><td>${esc(u.role)}</td><td>${esc(u.department)}</td>
+          <td>${u.level}/5</td><td>${u.simulations ? `${u.reported}/${u.simulations}` : '–'}</td>
+          <td>${u.id === S.state.user.id ? '<span class="chip blue">Prikazan</span>' : `<button class="btn sm" data-view-as="${esc(u.id)}">Prikaži kot</button>`}</td>
+        </tr>`).join('')}
+      </table></div>
+    </div>`;
+}
+
+async function importUsers(form) {
+  const f = new FormData(form);
+  try {
+    const r = await api('/api/users/import', { method: 'POST', body: { csv: f.get('csv'), includeNew: f.has('includeNew') } });
+    toast(`Uvoženo: ${r.added} novih, ${r.updated} posodobljenih.${r.skipped.length ? ` Preskočeno: ${r.skipped.map(esc).join('; ')}` : ''}`, 7000);
+    render();
+  } catch (e) {
+    toast(esc(e.message), 7000);
+  }
+}
+
+async function setIncluded(body) {
+  S.data.users = await api('/api/users/include', { method: 'POST', body });
+  await refreshState();
+  render(false);
+}
+
+async function switchUser(id) {
+  S.state = await api(`/api/users/${id}/activate`, { method: 'POST' });
+  Object.assign(S, { messages: [], selected: null });
+  S.messages = await api('/api/messages');
+  if (currentView() === 'uporabniki') location.hash = '#/nabiralnik';
+  else render();
+  toast(`Prikazan zaposleni: ${esc(S.state.user.name)} (${esc(S.state.user.id)}).`);
 }
 
 // ---------------------------------------------------------------------------
@@ -768,6 +924,7 @@ async function savePolicy(form) {
 const VIEWS = {
   nabiralnik: [loadInbox, inboxView],
   napredek: [null, progressView],
+  uporabniki: [loadUsers, usersView],
   agent: [loadAgent, agentView],
   trznica: [loadMarket, marketView],
   placila: [loadPayments, paymentsView],
@@ -794,7 +951,7 @@ window.addEventListener('hashchange', async () => {
   await render();
   if (currentView() === 'agent' && S.autoPlan) {
     S.autoPlan = false;
-    makePlan();
+    makePlan([S.state.user.id]);
   }
 });
 
@@ -819,21 +976,53 @@ document.addEventListener('click', (e) => {
   if (t.closest('[data-goto-agent]')) {
     closeModal();
     S.autoPlan = !(S.plan && ['pending', 'running'].includes(S.plan.status));
+    if (S.autoPlan) S.pick = new Set([S.state.user.id]);
     if (currentView() === 'agent') {
       S.autoPlan = false;
-      return makePlan();
+      return makePlan([S.state.user.id]);
     }
     location.hash = '#/agent';
     return;
   }
   if (t.closest('[data-plan]')) return makePlan();
+  const dp = t.closest('[data-deliver-plan]');
+  if (dp) return deliverPlan(dp.dataset.deliverPlan);
+  const pk = t.closest('[data-pick]');
+  if (pk) {
+    S.pick = new Set(pk.dataset.pick === 'all' ? S.data.users.filter((u) => !u.skipReason).map((u) => u.id) : []);
+    return render(false);
+  }
+  const pd = t.closest('[data-pick-dept]');
+  if (pd) {
+    const ids = S.data.users.filter((u) => !u.skipReason && u.department === pd.dataset.pickDept).map((u) => u.id);
+    const allOn = ids.every((id) => S.pick.has(id));
+    ids.forEach((id) => (allOn ? S.pick.delete(id) : S.pick.add(id)));
+    return render(false);
+  }
   const dec = t.closest('[data-decide]');
   if (dec) return decide(dec.dataset.decide === '1');
+  if (t.closest('[data-sample-csv]')) return ($('#import-form textarea').value = SAMPLE_CSV);
+  const dept = t.closest('[data-dept]');
+  if (dept) return setIncluded({ department: dept.dataset.dept, included: dept.dataset.on === '1' });
+  const viewAs = t.closest('[data-view-as]');
+  if (viewAs) return switchUser(viewAs.dataset.viewAs);
   const w = t.closest('[data-wallet]');
   if (w) return { connect: connectWallet, refund: refundFunds, unlink: unlinkWallet, watch: watchUsdc }[w.dataset.wallet]();
 });
 
 document.addEventListener('change', async (e) => {
+  if (e.target.id === 'user-switch') return switchUser(e.target.value);
+  const pu = e.target.closest('[data-pick-user]');
+  if (pu) {
+    pu.checked ? S.pick.add(pu.dataset.pickUser) : S.pick.delete(pu.dataset.pickUser);
+    return render(false);
+  }
+  const inc = e.target.closest('[data-include]');
+  if (inc) return setIncluded({ ids: [inc.dataset.include], included: inc.checked });
+  if (e.target.id === 'csv-file' && e.target.files[0]) {
+    $('#import-form textarea').value = await e.target.files[0].text();
+    return;
+  }
   const allow = e.target.closest('[data-allow]');
   if (allow) {
     await api(`/api/agents/${allow.dataset.allow}/allowlist`, { method: 'POST', body: { allowlisted: allow.checked } });
@@ -846,6 +1035,10 @@ document.addEventListener('submit', (e) => {
   if (e.target.id === 'policy-form') {
     e.preventDefault();
     savePolicy(e.target);
+  }
+  if (e.target.id === 'import-form') {
+    e.preventDefault();
+    importUsers(e.target);
   }
   if (e.target.id === 'deposit-form') {
     e.preventDefault();
