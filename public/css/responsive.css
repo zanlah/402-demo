@@ -1,0 +1,116 @@
+@media (min-width: 1800px) { .main { margin-inline: auto; } }
+@media (max-width: 1180px) {
+  .app { grid-template-columns: 226px minmax(0, 1fr); }
+  .sidebar { padding-inline: 13px; }
+  .cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #agent-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .inbox { grid-template-columns: 245px minmax(0, 1fr); }
+  .main { padding-inline: 24px; }
+  .login-hero { gap: 38px; }
+  .terminal-body { padding-inline: 16px; font-size: 11px; }
+}
+@media (max-width: 900px) {
+  .app { display: block; }
+  .sidebar { height: auto; position: relative; padding: 17px 20px 0; border-right: 0; border-bottom: 1px solid var(--line); overflow: visible; gap: 16px; }
+  .sidebar .brand-name { font-size: 17px; }
+  .sidebar .brand-sub { font-size: 7px; }
+  #identity { position: absolute; right: 160px; top: 19px; padding: 3px 8px; border: 0; background: none; }
+  #identity strong, #identity > span:last-child { display: none; }
+  .identity-label { font-size: 9px; }
+  .sidebar-logout.btn { position: absolute; right: 20px; top: 17px; margin: 0; min-height: 32px; padding: 6px 9px; font-size: 9px; }
+  .sidebar-logout::before { content: none; }
+  .nav { flex-direction: row; overflow-x: auto; gap: 6px; padding: 0 0 10px; }
+  .nav::before, .nav a.active::after { content: none; }
+  .nav a { flex-shrink: 0; white-space: nowrap; min-height: 43px; padding: 8px 12px; }
+  .nav .ico { width: 13px; }
+  .wallet { display: none; }
+  .workspace-bar { min-height: 43px; padding-inline: 24px; }
+  .workspace-mode { font-size: 8px; }
+  .workspace-path { font-size: 9px; gap: 8px; }
+  .main { padding: 28px 24px 40px; }
+  .login-hero { grid-template-columns: 1fr 1fr; gap: 30px; padding-block: 38px; }
+  .login-intro h1 { font-size: 45px; }
+  .terminal-body { font-size: 10px; padding: 17px 12px; }
+  .code-line { gap: 10px; }
+  .terminal-result { font-size: 10px; margin-left: 26px; padding-left: 9px; }
+  .signed-out .main { padding: 24px; }
+  .card { padding: 20px; }
+  .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 650px) {
+  body { font-size: 12px; }
+  h1 { font-size: 29px; }
+  h2 { font-size: 15px; }
+  .main { padding: 24px 16px 34px; }
+  .main .sub { font-size: 12px; }
+  .eyebrow { font-size: 9px; letter-spacing: .025em; }
+  .sidebar { padding: 15px 16px 0; gap: 15px; }
+  .sidebar .logo { width: 30px; height: 30px; font-size: 12px; }
+  .sidebar .brand-name { font-size: 15px; }
+  .sidebar .brand-sub { display: none; }
+  #identity { display: none; }
+  .sidebar-logout.btn { top: 15px; right: 16px; min-height: 30px; }
+  .nav a { font-size: 11px; }
+  .workspace-bar { padding: 0 16px; min-height: 40px; }
+  .workspace-path .path-root, .workspace-path .path-separator:first-of-type { display: none; }
+  .workspace-mode { font-size: 7px; letter-spacing: .02em; gap: 5px; }
+  .workspace-footer { gap: 8px; padding: 14px 16px; font-size: 8px; flex-wrap: wrap; }
+  .cols-3, .cols-2, .form-grid, .member-list, .mapping-grid { grid-template-columns: minmax(0, 1fr); }
+  .cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .stat { padding: 15px 12px; }
+  .stat .value { font-size: 22px; }
+  .stat .label, .stat .hint { font-size: 9px; }
+  .card { padding: 18px 16px; }
+  .grid[style*="grid-template-columns"] { grid-template-columns: minmax(0, 1fr) !important; }
+  .section-heading { align-items: flex-start; flex-wrap: wrap; }
+  .section-heading .btn { margin-left: auto; }
+  .learning-strip, .banner { flex-direction: column; align-items: stretch; gap: 13px; padding: 14px; }
+  .inbox { grid-template-columns: minmax(0, 1fr); min-height: 390px; }
+  .inbox.reading .msg-list { display: none; }
+  .inbox:not(.reading) .reader { display: none; }
+  .msg-list { border-right: 0; max-height: none; }
+  .reader { padding: 20px 16px; }
+  .reader .body { font-size: 14px; line-height: 1.85; }
+  .reader-head .subject { font-size: 18px; }
+  .sender { font-size: 11px; gap: 9px; }
+  .sender .small { font-size: 9px; }
+  .back-btn { display: inline-flex; margin-bottom: 20px; }
+  .actions-bar .btn, .next-actions .btn, .modal .row-actions .btn { flex: 1 1 100%; min-height: 48px; }
+  .bar-row { grid-template-columns: 110px minmax(0, 1fr) 40px; gap: 8px; font-size: 10px; }
+  .kv { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .kv dd { margin-bottom: 8px; }
+  .audit > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .agent-card .foot { flex-wrap: wrap; }
+  .approval { padding: 15px 12px; }
+  .approval legend { max-width: 100%; }
+  .members { padding: 14px; }
+  .flow { grid-template-columns: minmax(0, 1fr); }
+  .modal-backdrop { padding: 12px; }
+  .modal { max-height: 94dvh; }
+  .modal .hero, .modal .content { padding: 20px 18px; }
+  .modal .hero h2 { font-size: 20px; }
+  .toast { bottom: 16px; right: 16px; font-size: 11px; }
+  .signed-out .main { padding: 20px 18px; }
+  .login-header { padding-bottom: 19px; }
+  .login-header .logo { width: 31px; height: 31px; font-size: 12px; }
+  .login-header .brand-name { font-size: 16px; }
+  .login-header .brand-sub { font-size: 7px; }
+  .login-edition > span { display: none; }
+  .login-edition b { font-size: 9px; }
+  .login-hero { grid-template-columns: minmax(0, 1fr); gap: 27px; padding: 33px 0 31px; }
+  .login-intro h1 { font-size: clamp(38px, 10.4vw, 58px); }
+  .login-intro p { font-size: 12px; }
+  .login-intro .eyebrow { font-size: 9px; margin-bottom: 17px; }
+  .learning-terminal { transform: none; box-shadow: 6px 6px 0 #161d2b; margin-right: 6px; }
+  .terminal-body { padding: 18px; font-size: 11px; }
+  .terminal-result { margin-top: 13px; }
+  .login-divider { margin-top: 4px; font-size: 9px; }
+  .login-options { gap: 16px; }
+  .login-card { padding: 23px 20px; }
+  .login-card h2 { font-size: 21px; }
+  .login-card p { font-size: 12px; }
+  .login-bottom { flex-direction: column; align-items: flex-start; gap: 12px; padding-top: 20px; }
+}
+
+@media (max-width: 650px) { .field input, .field select, .login-card input, .reflection textarea { font-size: 16px; } }

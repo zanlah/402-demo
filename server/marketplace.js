@@ -1,0 +1,15 @@
+import { ALL_TACTICS } from './config.js';
+import { addressFor } from './utils.js';
+
+export const agents = [
+  { id: 'mailforge', name: 'MailForge', vendor: 'Phishlab d.o.o.', kind: 'generator', channel: 'email', tactics: ['avtoriteta', 'nujnost', 'radovednost'], price: 0.12, rating: 4.7, verified: true, allowlisted: true, requiresPersonalData: false, description: 'Realistična e-poštna phishing sporočila s petimi stopnjami težavnosti.' },
+  { id: 'trustchain', name: 'TrustChain', vendor: 'SecureSim GmbH', kind: 'generator', channel: 'email', tactics: ['zaupanje'], price: 0.18, rating: 4.9, verified: true, allowlisted: true, requiresPersonalData: false, description: 'Simulira prevzem obstoječe e-poštne niti znanega sodelavca (thread hijacking).' },
+  { id: 'devbait', name: 'DevBait', vendor: 'RedTeam Labs', kind: 'generator', channel: 'email', tactics: ['tehnicni', 'nujnost'], price: 0.1, rating: 4.5, verified: true, allowlisted: true, requiresPersonalData: false, techFocus: true, description: 'Napadi na tehnično osebje: GitHub, CI/CD, dostopni žetoni.' },
+  { id: 'smishlab', name: 'SmishLab', vendor: 'MobileSec', kind: 'generator', channel: 'sms', tactics: ['nujnost'], price: 0.06, rating: 4.4, verified: true, allowlisted: true, requiresPersonalData: false, description: 'SMS prevare (smishing): paketi, doplačila, zaklep računa.' },
+  { id: 'chatbait', name: 'ChatBait', vendor: 'CollabSec', kind: 'generator', channel: 'chat', tactics: ['zaupanje', 'tehnicni'], price: 0.09, rating: 4.6, verified: true, allowlisted: true, requiresPersonalData: false, techFocus: true, description: 'Sporočila v Teams/Slack: lažna IT podpora, zahteve za kode MFA.' },
+  { id: 'voicemimic', name: 'VoiceMimic', vendor: 'SynthVoice AI', kind: 'generator', channel: 'glas', tactics: ['avtoriteta'], price: 0.45, rating: 4.8, verified: true, allowlisted: false, requiresPersonalData: false, description: 'Glasovna sporočila s sintetiziranim glasom (vishing). Zahteva posebno odobritev.' },
+  { id: 'osint', name: 'OSINT Profiler', vendor: 'DeepTrace', kind: 'generator', channel: 'email', tactics: ['zaupanje', 'avtoriteta'], price: 0.3, rating: 4.3, verified: true, allowlisted: true, requiresPersonalData: true, description: 'Iz javnih virov (LinkedIn, splet) zbere osebne podatke za ciljno usmerjen napad.' },
+  { id: 'cheapphish', name: 'CheapPhish', vendor: 'neznan', kind: 'generator', channel: 'email', tactics: ALL_TACTICS, price: 0.02, rating: 3.1, verified: false, allowlisted: false, requiresPersonalData: false, description: 'Poceni masovno generiranje phishing predlog. Ponudnik ni preverjen.' },
+  { id: 'ethicsguard', name: 'EthicsGuard QA', vendor: 'TrustLab', kind: 'reviewer', channel: null, tactics: [], price: 0.02, rating: 4.8, verified: true, allowlisted: true, requiresPersonalData: false, description: 'Neodvisen pregled realističnosti in etičnosti simulacije pred dostavo.' },
+].map((a) => ({ ...a, payTo: addressFor(a.id), calls: 0, earned: 0 }));
+export const agentById = (id) => agents.find((a) => a.id === id);

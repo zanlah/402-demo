@@ -1,0 +1,206 @@
+[
+  {
+    "id": "01-loceni-vlogi",
+    "title": "Ločena vstopa za zaposlenega in IT-skrbnika",
+    "requirements": [
+      "I1"
+    ],
+    "legend": [
+      "Zaposleni vstopi v učni portal, namenjen vajam in njegovemu napredku.",
+      "IT-skrbnik vstopi v konzolo za skupine, kampanje, stroške in poročila."
+    ],
+    "file": "01-loceni-vlogi.png",
+    "url": "http://localhost:4020/",
+    "width": 1184,
+    "height": 359.65625
+  },
+  {
+    "id": "02-predogled-uvoza",
+    "title": "Preslikava stolpcev in preverjanje podvojenih vnosov",
+    "requirements": [
+      "I2"
+    ],
+    "legend": [
+      "Obvezna polja se povežejo s stolpci datoteke pred uvozom.",
+      "Predogled razlikuje nove vnose, podvojene e-naslove in neveljavne podatke.",
+      "Skrbnik izrecno potrdi uvoz veljavnih vrstic."
+    ],
+    "file": "02-predogled-uvoza.png",
+    "url": "http://localhost:14022/#/uporabniki",
+    "width": 971.40625,
+    "height": 689.359375
+  },
+  {
+    "id": "03-skupine-nastavitve",
+    "title": "Skupine z različnimi zahtevnostmi in kanali",
+    "requirements": [
+      "I2",
+      "I3"
+    ],
+    "legend": [
+      "Skupina ima svojo zahtevnost in največje število vaj na osebo.",
+      "E-pošta, SMS in drugi kanali se določijo za izbrano skupino.",
+      "Članstvo je mogoče določiti po posamezniku ali oddelku."
+    ],
+    "file": "03-skupine-nastavitve.png",
+    "url": "http://localhost:14022/#/skupine",
+    "width": 1017.40625,
+    "height": 600
+  },
+  {
+    "id": "04-priprava-kampanje",
+    "title": "Priprava kampanje za določeno skupino",
+    "requirements": [
+      "I3"
+    ],
+    "legend": [
+      "Izbor ciljne skupine uporabi njene člane, kanale, zahtevnost in pogostost.",
+      "Pred načrtovanjem je razvidno, kateri zaposleni lahko prejmejo vajo.",
+      "Priprava načrta je ločena od poznejše odobritve nakupa in pošiljanja."
+    ],
+    "file": "04-priprava-kampanje.png",
+    "url": "http://localhost:14022/#/agent",
+    "width": 819,
+    "height": 691.84375
+  },
+  {
+    "id": "05-stroski-nacrta",
+    "title": "Stroškovne postavke in plačnik kampanje",
+    "requirements": [
+      "I4"
+    ],
+    "legend": [
+      "Načrt prikaže izbranega ponudnika, kanal in ocenjeni strošek posamezne vaje.",
+      "Skupni znesek vključuje generiranje in etični pregled; plačnik je organizacija."
+    ],
+    "file": "05-stroski-nacrta.png",
+    "url": "http://localhost:14022/#/agent",
+    "width": 819,
+    "height": 547.4375
+  },
+  {
+    "id": "06-odobritev",
+    "title": "Izrecna odobritev prejemnikov, stroškov in podatkov",
+    "requirements": [
+      "I3",
+      "I4"
+    ],
+    "legend": [
+      "Kontrolni seznam zahteva potrditev prejemnikov, stroškov in obsega podatkov.",
+      "Odobritev je onemogočena, dokler skrbnik ne potrdi vseh treh postavk."
+    ],
+    "file": "06-odobritev.png",
+    "url": "http://localhost:14022/#/agent",
+    "width": 819,
+    "height": 360
+  },
+  {
+    "id": "07-placila",
+    "title": "Pregled stroškov, omejitve porabe in stanja",
+    "requirements": [
+      "I4"
+    ],
+    "legend": [
+      "Poraba v mesecu je prikazana skupaj z mesečno omejitvijo.",
+      "Stanje denarnice pomeni razpoložljiva sredstva in je ločeno od dovoljene porabe.",
+      "Število plačil omogoča pregled opravljenih nakupov storitev."
+    ],
+    "file": "07-placila.png",
+    "url": "http://localhost:14022/#/placila",
+    "width": 867,
+    "height": 440
+  },
+  {
+    "id": "08-zasebnost",
+    "title": "Jasen dostop do rezultatov in rok hrambe",
+    "requirements": [
+      "I1",
+      "I3"
+    ],
+    "legend": [
+      "Skrbnik določi rok hrambe osebnih učnih rezultatov.",
+      "Razlaga loči osebne rezultate zaposlenega od skupinskih kazalnikov za organizacijo."
+    ],
+    "file": "08-zasebnost.png",
+    "url": "http://localhost:14022/#/pravila",
+    "width": 819,
+    "height": 240
+  },
+  {
+    "id": "09-ucni-portal",
+    "title": "Osebna vaja z razlago lastne odločitve",
+    "requirements": [
+      "I5"
+    ],
+    "legend": [
+      "Sporočilo omogoča preverjanje opozorilnih znakov in varen odziv.",
+      "Neobvezna utemeljitev odločitve ostane del osebne učne zgodovine."
+    ],
+    "file": "09-ucni-portal.png",
+    "url": "http://localhost:14022/#/nabiralnik",
+    "width": 572,
+    "height": 697.296875
+  },
+  {
+    "id": "10-razlaga",
+    "title": "Takojšnja razlaga in naslednji učni korak",
+    "requirements": [
+      "I5"
+    ],
+    "legend": [
+      "Razlaga poveže odziv z uporabljeno taktiko in konkretnimi opozorilnimi znaki.",
+      "Po razlagi sta neposredno dostopna naslednja vaja in osebni napredek."
+    ],
+    "file": "10-razlaga.png",
+    "url": "http://localhost:14022/#/nabiralnik",
+    "width": 640,
+    "height": 690.28125
+  },
+  {
+    "id": "11-mobilna-razlaga",
+    "title": "Učni korak na telefonu",
+    "requirements": [
+      "I5"
+    ],
+    "legend": [
+      "Konkreten nasvet za ravnanje je dostopen tudi na telefonu.",
+      "Večji gumbi vodijo do naslednje vaje in osebnega napredka."
+    ],
+    "file": "11-mobilna-razlaga.png",
+    "url": "http://localhost:14022/#/nabiralnik",
+    "width": 366,
+    "height": 793.359375
+  },
+  {
+    "id": "12-osebni-napredek",
+    "title": "Osebni rezultat in napredek po taktikah",
+    "requirements": [
+      "I5"
+    ],
+    "legend": [
+      "Zaposleni vidi svoje prepoznane vaje, točke, zahtevnost in čas odziva.",
+      "Pregled po taktikah pokaže, katere veščine še potrebujejo vajo.",
+      "Pojasnilo pove, kdo vidi rezultate in katerih podatkov ponudniki ne prejmejo."
+    ],
+    "file": "12-osebni-napredek.png",
+    "url": "http://localhost:14022/#/napredek",
+    "width": 1099,
+    "height": 660
+  },
+  {
+    "id": "13-skupinsko-porocilo",
+    "title": "Skupinski kazalniki kampanje in izvoz",
+    "requirements": [
+      "I6"
+    ],
+    "legend": [
+      "Kampanja je povezana s ciljno skupino in številom prejemnikov.",
+      "Organizacija vidi skupne prijave, klike in odzivni čas, brez posameznih odgovorov.",
+      "Poročilo je mogoče izvoziti v CSV; kazalniki se pokažejo šele pri najmanj petih sodelujočih."
+    ],
+    "file": "13-skupinsko-porocilo.png",
+    "url": "http://localhost:14022/?porocilo=1#/organizacija",
+    "width": 1106,
+    "height": 540
+  }
+]

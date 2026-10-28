@@ -6,12 +6,14 @@
   "private": true,
   "scripts": {
     "start": "node server.js",
-    "start:sepolia": "X402_MODE=sepolia node server.js"
+    "start:sepolia": "X402_MODE=sepolia node server.js",
+    "test": "node --test test/*.test.js"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
+    "read-excel-file": "^9.3.13",
     "viem": "^2.57.10"
   }
 }

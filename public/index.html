@@ -3,39 +3,38 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CyberAgent Marketplace – prototip</title>
+  <title>CyberAgent / Varnost se začne pri tebi</title>
+  <meta name="theme-color" content="#0b0c10">
+  <meta name="description" content="Praktične vaje prepoznavanja spletnih prevar in pregleden nadzor varnostnega usposabljanja.">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <div class="app">
     <aside class="sidebar">
       <div class="brand">
-        <div class="logo">CA</div>
+        <div class="logo" aria-hidden="true">{c}</div>
         <div>
-          <div class="brand-name">CyberAgent</div>
-          <div class="brand-sub">Marketplace · prototip</div>
+          <div class="brand-name">cyberagent<span class="brand-cursor" aria-hidden="true">_</span></div>
+          <div class="brand-sub">Varnost skozi prakso</div>
         </div>
       </div>
-      <nav class="nav">
-        <div class="nav-group">Zaposleni</div>
-        <select id="user-switch" class="user-switch" title="Čigav nabiralnik in napredek je prikazan"></select>
-        <a href="#/nabiralnik" data-view="nabiralnik"><span class="ico">✉</span>Nabiralnik <span class="badge" id="unread"></span></a>
-        <a href="#/napredek" data-view="napredek"><span class="ico">↗</span>Moj napredek</a>
-        <div class="nav-group">Organizacija</div>
-        <a href="#/uporabniki" data-view="uporabniki"><span class="ico">☺</span>Uporabniki</a>
-        <a href="#/agent" data-view="agent"><span class="ico">◎</span>Glavni agent <span class="badge warn" id="pending"></span></a>
-        <a href="#/trznica" data-view="trznica"><span class="ico">▦</span>Tržnica agentov</a>
-        <a href="#/placila" data-view="placila"><span class="ico">⇄</span>Plačila x402</a>
-        <a href="#/organizacija" data-view="organizacija"><span class="ico">▤</span>Analitika</a>
-        <a href="#/pravila" data-view="pravila"><span class="ico">⚙</span>Pravila in nadzor</a>
-      </nav>
+      <div id="identity"></div>
+      <nav class="nav" aria-label="Glavna navigacija"></nav>
+      <button class="btn sidebar-logout" data-logout>Zamenjaj prijavo</button>
       <div class="wallet" id="wallet"></div>
     </aside>
-    <main class="main" id="view"></main>
+    <div class="workspace">
+      <header class="workspace-bar">
+        <div class="workspace-path" id="workspace-path" aria-label="Trenutni pogled"></div>
+        <div class="workspace-mode">PROTOTIP / V3</div>
+      </header>
+      <main class="main" id="view" tabindex="-1"></main>
+      <footer class="workspace-footer"><span><span class="footer-symbol" aria-hidden="true">&lt;/&gt;</span> cyberagent / varnost skozi prakso</span><span>Opazuj. Preveri. Prijavi.</span></footer>
+    </div>
   </div>
   <div class="modal-backdrop" id="modal" hidden></div>
   <div class="statusbar" id="statusbar" hidden></div>
-  <div class="toast" id="toast" hidden></div>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script src="/app.js" type="module"></script>
 </body>
 </html>
